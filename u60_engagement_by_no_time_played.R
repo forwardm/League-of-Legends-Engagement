@@ -290,7 +290,38 @@ summary(r2)
 corrplot(cor(noHourPlayedTraits))
 
 
+##--------------stepwise regression------------#
 
+#define intercept-only model
+intercept_only <- lm(nextHourGameDuration ~ 1, data= (test_data_locked %>%
+                                                        select(-c('nextDayGameDuration','nextThreeHourGameDuration',
+                                                                'nextWeekGameDuration', 'nextThreeDayGameDuration'))))
+
+#define model with all predictors
+all <- lm(nextHourGameDuration ~., data= (test_data_locked %>%
+                                                     select(-c('nextDayGameDuration','nextThreeHourGameDuration',
+                                                               'nextWeekGameDuration', 'nextThreeDayGameDuration'))))
+
+#perform backward stepwise regression
+both <- step(intercept_only, direction='both', scope=formula(all), trace=0)
+summary(both)
+both$anova
+both$coefficients
+
+
+backward <- step(all, direction='backward', scope=formula(all), trace=0)
+summary(backward)
+backward$anova
+backward$coefficients
+
+
+forward <- step(all, direction='forward', scope=formula(all), trace=0)
+summary(forward)
+forward$anova
+forward$coefficient
+
+
+#--------------end of stepwise regresssion
 
 
 
