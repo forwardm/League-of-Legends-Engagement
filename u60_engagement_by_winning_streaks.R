@@ -1,7 +1,5 @@
 ## lets goooooo, engagement on users
 
-install.packages('car')
-install.packages('randomForest')
 library(car)
 library(dplyr)
 library(party)
@@ -340,9 +338,7 @@ heyo <- glm( nextHourGameDuration~ winStreak + lossStreak + ended_winning_streak
 RMSE(heyo$fitted.values, test_data_locked$nextHourGameDuration)
 mean(test_data_locked$nextHourGameDuration)
 summary(heyo)
-vif(heyo)
 
-test_data_locked$timeCCingOthers
 
 
 
