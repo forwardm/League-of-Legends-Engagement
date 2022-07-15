@@ -26,7 +26,7 @@ focus_data <- raw_data[!(raw_data$gameDuration %in% outliers), ]
 focus_data <- focus_data %>% select(-ends_with('challenge')) 
 
 #focus only on these main games, not tutorials. subset data to only include these
-focus_data = focus_data[focus_data$gameMode == 'CLASSIC' || focus_data$gameMode == 'ARAM' || focus_data$gameMode == 'URF' ,]
+focus_data = focus_data[focus_data$gameMode == 'CLASSIC' | focus_data$gameMode == 'ARAM' | focus_data$gameMode == 'URF' ,]
 
 
 # convnert the startimestamp to a date time format
@@ -138,6 +138,13 @@ test_data_locked <- test_data_locked %>%
 test_data_locked = test_data_locked[test_data_locked$gameMode == 'CLASSIC' || test_data_locked$gameMode == 'ARAM' || test_data_locked$gameMode == 'URF' ,]
 
 test_data_locked$gameMode
+
+
+
+
+#------urf retention-------#
+
+## tries to see impact of the urf retention rate vs overall retention rate
 urf <- test_data_locked[test_data_locked$gameMode == 'URF',]
 
 max(urf$gameStartTimestamp)
@@ -146,49 +153,274 @@ min(urf$gameStartTimestamp)
 plot(urf$gameStartTimestamp)
 typeof(urf$gameStartTimestamp)
 
-churn_rate
+urf <- urf[urf$gameStartTimestamp >= '2022-05-01 16:00:56 UTC',]
 
-
-urf <- urf[urf$gameStartTimestamp >= '2022-04-01 16:00:56 UTC',]
-
+## when did urf game run in 2022, going to use later for graphs
 min_urf <- min(urf$gameStartTimestamp)
 min_urf
 max_urf <- max(urf$gameStartTimestamp)
 max_urf
 
 
-daily_retention_rate <- count(distinct(test_data_locked$puuid))
+
+#--------- intdividual game mode retentions based off current gamemode but all future gamemodes---------#
+## need to change to ymd and ensure as.date, do this for everytime
+urf$gameStartTimestamp <- as.Date(urf$gameStartTimestamp)
+hi <- ymd(urf$gameStartTimestamp)
+urf$gameStartTimestamp <- hi
 
 
 
-length((unique(test_data_locked$puuid))
+#daily retention for urf alone
+Retention_urf_2_day <- urf %>% 
+  group_by(gameStartTimestamp) %>% 
+  summarise(retention=length(intersect(puuid,urf$puuid[urf$gameStartTimestamp==(gameStartTimestamp+1)]))/n_distinct(puuid)) %>% 
+  mutate(retention=lag(retention))
 
-weekly_retention_rate <- y
+mean(Retention_urf_2_day$retention, na.rm =TRUE)
 
-df_retention <- test_data_locked %>%
-  group_by(gameMode) %>%
-  arrange(gameStartTimestamp) >%>
-  mutate()
-
-
-expand.grid(date1 = unique(test_data_locked$gameStartTimestamp),
-            date2 = unique(test_data_locked$gameStartTimestamp)) %>%
-  filter(date1 < date2) %>%
-  group_by(date1, date2 ) %>%
-  do({ids_1 = setdiff(unique(test_data_locked[test_data_locked$gameStartTimestamp == ymd(.$date1),]$puuid),
-                      unique(test_data_locked[test_data_locked$gameStartTimestamp < ymd(.$date1),]$puuid))
-  N_ids_1 = length(ids_1)
-  ids_2 = unique(test_data_locked[test_data_locked$gameStartTimestamp == ymd(.$date2),]$puuid)
-  N_ids_2 = length(inntersect(ids_2, ids_1))
-  data.frame(Prc = N_ids_2/N_ids_1)
-  }) %>% ungroup()
+ggplot(aes(x=gameStartTimestamp, y= retention), data=Retention_urf_2) + geom_point()
 
 
+#weekly retention for urf alone
+
+Retention_urf_2_week <- urf %>% 
+  group_by(gameStartTimestamp) %>% 
+  summarise(retention=length(intersect(puuid,urf$puuid[urf$gameStartTimestamp==(gameStartTimestamp+7)]))/n_distinct(puuid)) %>% 
+  mutate(retention=lag(retention,n=7))
+
+mean(Retention_urf_2_week$retention, na.rm =TRUE)
+
+ggplot(aes(x=gameStartTimestamp, y= retention), data=Retention_urf_2) + geom_point()
 
 
 
+#------all retention for all games of urf aram and classic-------#
+##dissects by each game mode,
 
 
+all_retention <- test_data_locked
+all_retention <- all_retention[all_retention$gameStartTimestamp >= '2022-04-01 16:00:56 UTC',]
+all_retention$gameStartTimestamp <- as.Date(all_retention$gameStartTimestamp)
+all_retention$gameStartTimestamp <- ymd(all_retention$gameStartTimestamp)
+
+
+Retention_all_3_day <- all_retention %>% 
+  group_by(gameStartTimestamp) %>% 
+  summarise(retention=length(intersect(puuid,all_retention$puuid[all_retention$gameStartTimestamp==(gameStartTimestamp+1)]))/n_distinct(puuid)) %>% 
+  mutate(retention=lag(retention))
+
+mean(Retention_all_2$retention, na.rm =TRUE)
+
+ggplot(aes(x=gameStartTimestamp, y= retention), data=Retention_all_3_day) + geom_point()
+library(zoo)
+
+temp.zoo <- zoo(Retention_all_3_day$retention, Retention_all_3_day$gameStartTimestamp)
+m.av <- rollmean(temp.zoo, 1, fill = list(NA, NULL, NA))
+
+Retention_all_3_day$ret.ma <- coredata(m.av)
+
+ggplot(Retention_all_3_day, aes(gameStartTimestamp, retention)) + geom_point()  + 
+  geom_line(aes(gameStartTimestamp, retention), color = 'red')
+
+
+#--- -----------classic----------#
+
+classic <- test_data_locked[test_data_locked$gameMode == 'CLASSIC',]
+
+classic <- classic[classic$gameStartTimestamp >= '2022-05-01 16:00:56 UTC',]
+
+
+classic$gameStartTimestamp <- as.Date(classic$gameStartTimestamp)
+hi <- ymd(classic$gameStartTimestamp)
+classic$gameStartTimestamp <- hi
+
+#daily retention
+
+
+Retention_classic_2_day <- classic %>% 
+  group_by(gameStartTimestamp) %>% 
+  summarise(retention=length(intersect(puuid,classic$puuid[classic$gameStartTimestamp==(gameStartTimestamp+1)]))/n_distinct(puuid)) %>% 
+  mutate(retention=lag(retention))
+
+mean(Retention_classic_2_day$retention, na.rm =TRUE)
+
+ggplot(aes(x=gameStartTimestamp, y= retention), data=Retention_classic_2) + geom_point()
+
+
+#weekly
+
+Retention_classic_2_week <- classic %>% 
+  group_by(gameStartTimestamp) %>% 
+  summarise(retention=length(intersect(puuid,classic$puuid[classic$gameStartTimestamp==(gameStartTimestamp+7)]))/n_distinct(puuid)) %>% 
+  mutate(retention=lag(retention,n=7))
+
+mean(Retention_classic_2_week$retention, na.rm =TRUE)
+
+ggplot(aes(x=gameStartTimestamp, y= retention), data=Retention_classic_2) + geom_point()
+
+
+#----------- end of classic---------#
+
+
+#--- -----------aram----------#
+
+aram <- test_data_locked[test_data_locked$gameMode == 'ARAM',]
+
+aram <- aram[aram$gameStartTimestamp >= '2022-05-01 16:00:56 UTC',]
+
+min(aram$gameStartTimestamp)
+
+aram$gameStartTimestamp <- as.Date(aram$gameStartTimestamp)
+hi <- ymd(aram$gameStartTimestamp)
+aram$gameStartTimestamp <- hi
+
+#daily retention
+
+
+Retention_aram_2_day <- aram %>% 
+  group_by(gameStartTimestamp) %>% 
+  summarise(retention=length(intersect(puuid,aram$puuid[aram$gameStartTimestamp==(gameStartTimestamp+1)]))/n_distinct(puuid)) %>% 
+  mutate(retention=lag(retention))
+
+mean(Retention_aram_2_day$retention, na.rm =TRUE)
+
+ggplot(aes(x=gameStartTimestamp, y= retention), data=Retention_aram_2_day) + geom_point()
+
+
+#weekly
+
+Retention_aram_2_week <- aram %>% 
+  group_by(gameStartTimestamp) %>% 
+  summarise(retention=length(intersect(puuid,aram$puuid[aram$gameStartTimestamp==(gameStartTimestamp+7)]))/n_distinct(puuid)) %>% 
+  mutate(retention=lag(retention,n=7))
+
+mean(Retention_aram_2_week$retention, na.rm =TRUE)
+
+ggplot(aes(x=gameStartTimestamp, y= retention), data=Retention_aram_2) + geom_point() + geom_ma(ma_fun = SMA, n=3)
+
+
+#----------- end of aram---------#
+
+#----------------- end of individual gameMode retention rates----------------#
+## slight flaw in this as it counted if they played in future games of any type only based on current game type they played
+
+
+mean(Retention_urf_2_day$retention, na.rm =TRUE)
+mean(Retention_classic_2_day$retention, na.rm =TRUE)
+mean(Retention_aram_2_day$retention, na.rm =TRUE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#---------------------------------- All after urf, and during urf-and 1 month before urf------------------#
+
+## this is the core analysis used in the disseration, it wants to understand the affects of
+## introducing a new game mode into a time period and if it increases retention rate
+
+#finds retention of all data points during urf period may 12 2022 - june 14 2022 roughly
+all_during_urf <- test_data_locked
+min_urf <- ymd(as.Date(min_urf))
+max_urf <- ymd(as.Date(max_urf))
+all_during_urf$gameStartTimestamp <- ymd(as.Date(all_during_urf$gameStartTimestamp))
+all_during_urf <- all_during_urf[all_during_urf$gameStartTimestamp >= min_urf & all_during_urf$gameStartTimestamp <= max_urf ,]
+
+min(all_during_urf$gameStartTimestamp)
+
+all_during_urf$gameStartTimestamp <- as.Date(all_during_urf$gameStartTimestamp)
+hi <- ymd(all_during_urf$gameStartTimestamp)
+all_during_urf$gameStartTimestamp <- hi
+
+#daily retention
+Retention_all_during_urf_2_day <- all_during_urf %>% 
+  group_by(gameStartTimestamp) %>% 
+  summarise(retention=length(intersect(puuid,all_during_urf$puuid[all_during_urf$gameStartTimestamp==(gameStartTimestamp+1)]))/n_distinct(puuid)) %>% 
+  mutate(retention=lag(retention))
+
+mean(Retention_all_during_urf_2_day$retention, na.rm =TRUE)
+
+#plots the daily retention with 3 day moving average for tracking
+ggplot(aes(x=gameStartTimestamp, y= retention), data=Retention_all_during_urf_2_day) + geom_point() + geom_ma(ma_fun = SMA, n=3) +
+  labs(x= 'Date', y = 'Retetion Rate ', title = 'Retention Rate of Players and 3 Day Moving Average',
+       subtitle = 'During URF Game Run Period')
+
+
+
+
+#inds retention of all data points after urf period june 14 2022 roughly
+all_after_urf <- test_data_locked
+min_urf <- ymd(as.Date(min_urf))
+max_urf <- ymd(as.Date(max_urf))
+all_after_urf$gameStartTimestamp <- ymd(as.Date(all_after_urf$gameStartTimestamp))
+all_after_urf <- all_after_urf[(all_after_urf$gameStartTimestamp >= max_urf)   ,]
+
+min(all_after_urf$gameStartTimestamp)
+max(all_after_urf$gameStartTimestamp)
+all_after_urf$gameStartTimestamp <- as.Date(all_after_urf$gameStartTimestamp)
+hi <- ymd(all_after_urf$gameStartTimestamp)
+all_after_urf$gameStartTimestamp <- hi
+
+#daily retention calc
+Retention_all_after_urf_2_day <- all_after_urf %>% 
+  group_by(gameStartTimestamp) %>% 
+  summarise(retention=length(intersect(puuid,all_after_urf$puuid[all_after_urf$gameStartTimestamp==(gameStartTimestamp+1)]))/n_distinct(puuid)) %>% 
+  mutate(retention=lag(retention))
+
+mean(Retention_all_after_urf_2_day$retention, na.rm =TRUE)
+
+#plot retention after urf game
+ggplot(aes(x=gameStartTimestamp, y= retention), data=Retention_all_after_urf_2_day) + geom_point() + geom_ma(ma_fun = SMA, n=3) +
+  labs(x= 'Date', y = 'Retetion Rate ', title = 'Retention Rate of Players and 3 Day Moving Average',
+       subtitle = 'After URF Game Run Period')
+
+
+
+
+#inds retention of all data points during before urf period may 12 2022 roughly
+all_before_urf <- test_data_locked
+min_urf <- ymd(as.Date(min_urf))
+max_urf <- ymd(as.Date(max_urf))
+all_before_urf$gameStartTimestamp <- ymd(as.Date(all_before_urf$gameStartTimestamp))
+all_before_urf <- all_before_urf[(all_before_urf$gameStartTimestamp <= min_urf & all_before_urf$gameStartTimestamp >= min_urf-30)   ,]
+
+min(all_before_urf$gameStartTimestamp)
+max(all_before_urf$gameStartTimestamp)
+all_before_urf$gameStartTimestamp <- as.Date(all_before_urf$gameStartTimestamp)
+hi <- ymd(all_before_urf$gameStartTimestamp)
+all_before_urf$gameStartTimestamp <- hi
+
+#daily retention before urf games started
+Retention_all_before_urf_2_day <- all_before_urf %>% 
+  group_by(gameStartTimestamp) %>% 
+  summarise(retention=length(intersect(puuid,all_before_urf$puuid[all_before_urf$gameStartTimestamp==(gameStartTimestamp+1)]))/n_distinct(puuid)) %>% 
+  mutate(retention=lag(retention))
+
+mean(Retention_all_before_urf_2_day$retention, na.rm =TRUE)
+#plot retention before urf with moving average
+ggplot(aes(x=gameStartTimestamp, y= retention), data=Retention_all_before_urf_2_day) + geom_point()  + geom_ma(ma_fun = SMA, n=3) +
+  labs(x= 'Date', y = 'Retetion Rate ', title = 'Retention Rate of Players and 3 Day Moving Average',
+       subtitle = '30 Days Before URF Game Run Period')
+
+
+
+#------done-------#
+
+mean(Retention_all_during_urf_2_day$retention, na.rm =TRUE)
+mean(Retention_all_after_urf_2_day$retention, na.rm =TRUE)
+
+ggplot(aes(x=gameStartTimestamp, y= retention), data=Retention_all_after_urf_2_day) + geom_point()
+ggplot(aes(x=gameStartTimestamp, y= retention), data=Retention_all_during_urf_2_day) + geom_point()
 
 
 
