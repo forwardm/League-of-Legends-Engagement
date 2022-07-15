@@ -25,13 +25,18 @@ focus_data <- raw_data[!(raw_data$gameDuration %in% outliers), ]
 
 
 #focus only on these main games, not tutorials. subset data to only include these
-focus_data = focus_data[focus_data$gameMode == 'CLASSIC' || focus_data$gameMode == 'ARAM' || focus_data$gameMode == 'URF' ,]
- 
+focus_data = focus_data[focus_data$gameMode == 'CLASSIC' | focus_data$gameMode == 'ARAM' | focus_data$gameMode == 'URF' ,]
+
 
 # convnert the startimestamp to a date time format
 focus_data$gameStartTimestamp <- as.POSIXct(focus_data$gameStartTimestamp/1000, origin = "1970-01-01")
 focus_data$gameStartTimestamp <- as_datetime(focus_data$gameStartTimestamp )
 focus_data$gameStartTimestamp 
+
+# convnert the endTimeStamp to a date time format
+focus_data$gameEndTimestamp <- as.POSIXct(focus_data$gameEndTimestamp/1000, origin = "1970-01-01")
+focus_data$gameEndTimestamp <- as_datetime(focus_data$gameEndTimestamp )
+focus_data$gameEndTimestamp 
 
 
 
@@ -51,24 +56,24 @@ focus_data$gameStartTimestamp
 #the function input needs to have the columns gameStartTimeStamp and puuid
 gameEngagementFutures <- function(focus_data) {
   
-  days <- focus_data[,c('gameStartTimestamp')]
+  days <- focus_data[,c('gameEndTimestamp')]
   puuid_1 <- focus_data[,c('puuid')]
   duration_futures <- focus_data
   
   hour_future_duration <- focus_data %>% group_by(puuid, matchID) %>%
-    summarise(nextHourGameDuration = sum(focus_data$gameDuration[days %within% interval(gameStartTimestamp+1,gameStartTimestamp+3600)& puuid_1 == puuid]))
+    summarise(nextHourGameDuration = sum(focus_data$gameDuration[days %within% interval(gameEndTimestamp+1,gameEndTimestamp+3600)& puuid_1 == puuid]))
   
   three_hour_future_duration <- focus_data %>% group_by(puuid, matchID) %>%
-    summarise(nextThreeHourGameDuration = sum(focus_data$gameDuration[days %within% interval(gameStartTimestamp+1,gameStartTimestamp+3600*3)& puuid_1 == puuid]))
+    summarise(nextThreeHourGameDuration = sum(focus_data$gameDuration[days %within% interval(gameEndTimestamp+1,gameEndTimestamp+3600*3)& puuid_1 == puuid]))
   
   daily_future_duration <- focus_data %>% group_by(puuid, matchID) %>%
-    summarise(nextDayGameDuration = sum(focus_data$gameDuration[days %within% interval(gameStartTimestamp+1,gameStartTimestamp+24*3600)& puuid_1 == puuid]))
+    summarise(nextDayGameDuration = sum(focus_data$gameDuration[days %within% interval(gameEndTimestamp+1,gameEndTimestamp+24*3600)& puuid_1 == puuid]))
   
   three_day_future_duration <- focus_data %>% group_by(puuid, matchID) %>%
-    summarise(nextThreeDayGameDuration = sum(focus_data$gameDuration[days %within% interval(gameStartTimestamp+1,gameStartTimestamp+24*3600*3)& puuid_1 == puuid]))
+    summarise(nextThreeDayGameDuration = sum(focus_data$gameDuration[days %within% interval(gameEndTimestamp+1,gameEndTimestamp+24*3600*3)& puuid_1 == puuid]))
   
   weekly_future_duration <- focus_data %>% group_by(puuid, matchID) %>%
-    summarise(nextWeekGameDuration = sum(focus_data$gameDuration[days %within% interval(gameStartTimestamp+1,gameStartTimestamp+24*3600*7)& puuid_1 == puuid]))
+    summarise(nextWeekGameDuration = sum(focus_data$gameDuration[days %within% interval(gameEndTimestamp+1,gameEndTimestamp+24*3600*7)& puuid_1 == puuid]))
   
   #combined the data to ensure we have raw data on how long players spent in next week
   merged_data <-  merge(focus_data, hour_future_duration, by = c("puuid", "matchID")) 
@@ -107,7 +112,7 @@ matchWinStreak <- function(focus_data){
   sorted_data$lossStreak = 0
   sorted_data$ended_losing_streak = 0
   sorted_data$ended_winning_streak = 0
-   
+  
   #make 4 new columns of zeroes
   #----- code here -------#
   
@@ -140,7 +145,7 @@ matchWinStreak <- function(focus_data){
     else{
       
       #if current match won = win, then increase win streak
-  
+      
       if(sorted_data[i,'win']== 'True' &&  sorted_data[i-1,c('winStreak')]  == 0  ){
         #print('in1')
         sorted_data[i,c('winStreak')] = sorted_data[i-1,c('winStreak')] + 1
@@ -178,11 +183,11 @@ matchWinStreak <- function(focus_data){
         i=i+1
       }
       
-        
+      
     }
     
     
-    }
+  }
   return(sorted_data)
 }
 
@@ -190,7 +195,7 @@ matchWinStreak <- function(focus_data){
 ## testing cases for if implemented correctly
 winstreak_test_input <- focus_data  
 head(winstreak_test_input)
-  
+
 winstreak_data <-matchWinStreak(winstreak_test_input)
 
 column_puuid <- which( colnames(winstreak_data)=="puuid" )
@@ -212,7 +217,7 @@ winstreak_random_puuid_test[, c('matchID','gameStartTimestamp', 'win',
 test_data <-gameEngagementFutures(focus_data)
 test_data <-matchWinStreak(test_data)
 
-#regresion data and subsetted columns
+#regresion data and subsetted columns  messing around
 regression_data<- test_data[,c(5,6,8,12,136,162,165,127,148,182,209,212, 226,245:249)]
 regression_data
 
@@ -229,6 +234,9 @@ regression_data %>%
   summarise( percent = 100 * n() / nrow( regression_data ) )
 
 
+
+#--------- finding data and similarities on a per gameMode basis------------#
+
 #select only these game types and make own df
 classic_games = regression_data[regression_data$gameMode == 'CLASSIC',]
 
@@ -239,45 +247,39 @@ urf_games = regression_data[regression_data$gameMode == 'URF',]
 
 
 #density plots of people who play different types of games
-#one hour
+#one hour all
 urf_density <- density(urf_games$nextHourGameDuration) # returns the density data 
 classic_density<-density(classic_games$nextHourGameDuration)
 aram_density <- density(aram_games$nextHourGameDuration)
-plot(urf_density, col= 1) # plots the results
-lines(classic_density,col = "blue")
-lines(aram_density, col = 'green')
+plot(classic_density, col='blue', main = 'Next Hour Game Duration By Game Type') + lines(aram_density,col = "black")+lines(urf_density, col = 'red')+ legend("topright", c("CLASSIC",
+                                                                                                                         " URF", "ARAM"),
+                                                                                                           fill= c('blue','red', 'black'))
 
-mean(urf_games$nextHourGameDuration)
-mean(classic_games$nextHourGameDuration)
-mean(aram_games$nextHourGameDuration)
+urf_hour_mean <- mean(urf_games$nextHourGameDuration)
+classic_hour_mean <-mean(classic_games$nextHourGameDuration)
+aram_hour_mean <-mean(aram_games$nextHourGameDuration)
 
 median(urf_games$nextHourGameDuration)
 median(classic_games$nextHourGameDuration)
 median(aram_games$nextHourGameDuration)
 
-#three hours
-urf_density <- density(urf_games$nextThreeHourGameDuration) # returns the density data 
-classic_density<-density(classic_games$nextThreeHourGameDuration)
-aram_density <- density(aram_games$nextThreeHourGameDuration)
-plot(urf_density, col= 1) # plots the results
-lines(classic_density,col = "blue")
-lines(aram_density, col = 'green')
 
-#day hours
+
+#day hours all modes
 urf_density <- density(urf_games$nextDayGameDuration) # returns the density data 
 classic_density<-density(classic_games$nextDayGameDuration)
 aram_density <- density(aram_games$nextDayGameDuration)
-plot(urf_density, col= 1) # plots the results
-lines(classic_density,col = "blue")
-lines(aram_density, col = 'green')
+plot(aram_density, col= 1,main = 'Next Day Game Duration By Game Type') + lines(classic_density,col = "blue")+lines(urf_density, col = 'red')+ legend("topright", c("CLASSIC",
+                                                                                                                       " URF", "ARAM"),
+                                                                                                         fill= c('blue','red', 'black'))
 
-#week duration
+#week duration modes
 urf_density <- density(urf_games$nextWeekGameDuration) # returns the density data 
 classic_density<-density(classic_games$nextWeekGameDuration)
 aram_density <- density(aram_games$nextWeekGameDuration)
-plot(urf_density, col= 1) # plots the results
-lines(classic_density,col = "blue")
-lines(aram_density, col = 'green')
+plot(aram_density, col= 1, main = 'Next Week Game Duration By Game Type') + lines(classic_density,col = "blue")+lines(urf_density, col = 'red') +
+  legend("topright", c("CLASSIC", " URF", "ARAM"),fill= c('blue','red', 'black'))
+
 
 mean(urf_games$nextWeekGameDuration)
 mean(classic_games$nextWeekGameDuration)
@@ -293,32 +295,112 @@ median(aram_games$nextWeekGameDuration)
 #running regressions on gametype and general
 
 win_data <- regression_data[,c(3:7,9,11:length(regression_data))]
+win_data <- win_data[win_data$gameMode == 'CLASSIC' | win_data$gameMode == 'ARAM' | win_data$gameMode == 'URF' ,]
+win_data$gameMode
 
 
-#next hour
+#next hour see affect of general characteristics with gameMode
 wayo <- lm(nextHourGameDuration ~  assists + deaths +
              kills + largestKillingSpree + goldSpent + totalHealsOnTeammates +
              totalTimeSpentDead + win +gameMode, data=win_data )
 
 summary(wayo)
 
+#next day see affect of general characteristics with gameMode
+wayo <- lm(nextDayGameDuration ~  assists + deaths +
+             kills + largestKillingSpree + goldSpent + totalHealsOnTeammates +
+             totalTimeSpentDead + win +gameMode, data=win_data )
 
-#next week
+summary(wayo)
+
+
+#next week see affect of general characteristics with gameMode
 wayo <- lm(nextWeekGameDuration ~  assists + deaths +
              kills + largestKillingSpree + goldSpent + totalHealsOnTeammates +
              totalTimeSpentDead + win +gameMode, data=win_data )
 
 summary(wayo)
 
-cor(win_data$nextHourGameDuration, win_data$totalTimeSpentDead)
 
 
 
 
 
+#next hour just affect of gameMode
+wayo <- lm(nextHourGameDuration ~    gameMode, data=win_data )
+
+summary(wayo)
+
+
+
+#next day just affect of gameMode
+wayo <- lm(nextDayGameDuration ~  gameMode, data=win_data )
+
+summary(wayo)
+
+
+#next week just affect of gameMode
+wayo <- lm(nextWeekGameDuration ~  gameMode, data=win_data )
+
+summary(wayo)
+#------------ end of regression and density plots for gameModes--------#
 
 
 
 
 
+#----------more general data regression testing not specific to gameModes---------#
 
+#next hour testing for general regression, not focused on gameModes
+wayo_hour <- lm(nextHourGameDuration ~    log(assists) + deaths +
+             kills + largestKillingSpree + goldSpent + totalHealsOnTeammates +
+             totalTimeSpentDead + win+ totalDamageDealt+ totalHeal+
+             totalDamageTaken+ consumablesPurchased+ champLevel +nexusLost +
+             nexusTakedowns + nexusKills
+             , data=test_data )
+
+summary(wayo_hour)
+
+#run stepwise regression on general regression for hour time period
+stepwise_hour <- stepAIC(wayo_hour, direction = 'both', trace= FALSE)
+summary(stepwise_hour)
+
+
+
+#next day
+wayo_day <- lm(nextDayGameDuration ~  assists + deaths +
+             kills + largestKillingSpree + goldSpent + totalHealsOnTeammates +
+             totalTimeSpentDead + win + totalDamageDealt+ totalHeal+ totalDamageTaken+
+           consumablesPurchased +champLevel +nexusLost +
+             nexusTakedowns + nexusKills
+           , data=test_data )
+
+summary(wayo_day)
+
+#run stepwise regression on general regression for day time period
+stepwise_day <- stepAIC(wayo_day, direction = 'both', trace= FALSE)
+summary(stepwise_day)
+
+
+#next week general regression
+wayo_week <- lm(nextWeekGameDuration ~  assists + deaths +
+             kills + largestKillingSpree + goldSpent + totalHealsOnTeammates +
+             totalTimeSpentDead + win+ totalDamageDealt+ totalHeal +totalDamageTaken+ 
+             consumablesPurchased +champLevel+nexusLost +
+             nexusTakedowns + nexusKills
+           ,
+           data=test_data )
+
+summary(wayo_week)
+
+#run stepwise regression on general regression for week time period
+stepwise_week <- stepAIC(wayo_week, direction = 'both', trace= FALSE)
+summary(stepwise_week)
+
+# run summary of all general regression and stepwise regressions.
+summary(wayo_hour)
+summary(stepwise_hour)
+summary(wayo_day)
+summary(stepwise_day)
+summary(wayo_week)
+summary(stepwise_week)
