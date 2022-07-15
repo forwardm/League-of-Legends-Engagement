@@ -27,7 +27,7 @@ focus_data <- raw_data[!(raw_data$gameDuration %in% outliers), ]
 
 
 #focus only on these main games, not tutorials. subset data to only include these
-focus_data = focus_data[focus_data$gameMode == 'CLASSIC' || focus_data$gameMode == 'ARAM' || focus_data$gameMode == 'URF' ,]
+focus_data = focus_data[focus_data$gameMode == 'CLASSIC' | focus_data$gameMode == 'ARAM' | focus_data$gameMode == 'URF' ,]
 
 
 # convnert the startimestamp to a date time format
@@ -36,6 +36,10 @@ focus_data$gameStartTimestamp <- as_datetime(focus_data$gameStartTimestamp )
 focus_data$gameStartTimestamp 
 
 
+# convnert the startimestamp to a date time format
+focus_data$gameEndTimestamp <- as.POSIXct(focus_data$gameEndTimestamp/1000, origin = "1970-01-01")
+focus_data$gameEndTimestamp <- as_datetime(focus_data$gameEndTimestamp )
+focus_data$gameEndTimestamp 
 
 
 
@@ -53,24 +57,24 @@ focus_data$gameStartTimestamp
 #the function input needs to have the columns gameStartTimeStamp and puuid
 gameEngagementFutures <- function(focus_data) {
   
-  days <- focus_data[,c('gameStartTimestamp')]
+  days <- focus_data[,c('gameEndTimestamp')]
   puuid_1 <- focus_data[,c('puuid')]
   duration_futures <- focus_data
   
   hour_future_duration <- focus_data %>% group_by(puuid, matchID) %>%
-    summarise(nextHourGameDuration = sum(focus_data$gameDuration[days %within% interval(gameStartTimestamp+1,gameStartTimestamp+3600)& puuid_1 == puuid]))
+    summarise(nextHourGameDuration = sum(focus_data$gameDuration[days %within% interval(gameEndTimestamp+1,gameEndTimestamp+3600)& puuid_1 == puuid]))
   
   three_hour_future_duration <- focus_data %>% group_by(puuid, matchID) %>%
-    summarise(nextThreeHourGameDuration = sum(focus_data$gameDuration[days %within% interval(gameStartTimestamp+1,gameStartTimestamp+3600*3)& puuid_1 == puuid]))
+    summarise(nextThreeHourGameDuration = sum(focus_data$gameDuration[days %within% interval(gameEndTimestamp+1,gameEndTimestamp+3600*3)& puuid_1 == puuid]))
   
   daily_future_duration <- focus_data %>% group_by(puuid, matchID) %>%
-    summarise(nextDayGameDuration = sum(focus_data$gameDuration[days %within% interval(gameStartTimestamp+1,gameStartTimestamp+24*3600)& puuid_1 == puuid]))
+    summarise(nextDayGameDuration = sum(focus_data$gameDuration[days %within% interval(gameEndTimestamp+1,gameEndTimestamp+24*3600)& puuid_1 == puuid]))
   
   three_day_future_duration <- focus_data %>% group_by(puuid, matchID) %>%
-    summarise(nextThreeDayGameDuration = sum(focus_data$gameDuration[days %within% interval(gameStartTimestamp+1,gameStartTimestamp+24*3600*3)& puuid_1 == puuid]))
+    summarise(nextThreeDayGameDuration = sum(focus_data$gameDuration[days %within% interval(gameEndTimestamp+1,gameEndTimestamp+24*3600*3)& puuid_1 == puuid]))
   
   weekly_future_duration <- focus_data %>% group_by(puuid, matchID) %>%
-    summarise(nextWeekGameDuration = sum(focus_data$gameDuration[days %within% interval(gameStartTimestamp+1,gameStartTimestamp+24*3600*7)& puuid_1 == puuid]))
+    summarise(nextWeekGameDuration = sum(focus_data$gameDuration[days %within% interval(gameEndTimestamp+1,gameEndTimestamp+24*3600*7)& puuid_1 == puuid]))
   
   #combined the data to ensure we have raw data on how long players spent in next week
   merged_data <-  merge(focus_data, hour_future_duration, by = c("puuid", "matchID")) 
@@ -220,40 +224,51 @@ test_data_locked <- test_data
 
 #--------------- analysis on the effect of streaks and likelihood of people playing more-------#
 
-## look at distributions and effects on future game duration played
+## look at distributions and effects on future game duration played, seperates data on whether a streak ended
 endedLosingStreak <- test_data_locked[test_data_locked$ended_losing_streak == 1,]
 endedWinningStreak <- test_data_locked[test_data_locked$ended_winning_streak == 1,]
 #neutralStreak <- test_data_locked[test_data_locked$ended_winning_streak == 0 && 
-  #                                  test_data_locked$ended_losing_streak==0,]
+#                                  test_data_locked$ended_losing_streak==0,]
 
+#finds densirt plots for hourly data for ending winning streak and ending losing strea
 els_density_hour <- density(endedLosingStreak$nextHourGameDuration)
 ews_density_hour <- density(endedWinningStreak$nextHourGameDuration)
-els_density_3hour <- density(endedLosingStreak$nextThreeHourGameDuration)
-ews_density_3hour <- density(endedWinningStreak$nextThreeHourGameDuration) 
+#els_density_3hour <- density(endedLosingStreak$nextThreeHourGameDuration)
+#ews_density_3hour <- density(endedWinningStreak$nextThreeHourGameDuration) 
 els_density_day <- density(endedLosingStreak$nextDayGameDuration)
 ews_density_day <- density(endedWinningStreak$nextDayGameDuration)
-els_density_3day <- density(endedLosingStreak$nextThreeDayGameDuration)
-ews_density_3day <- density(endedWinningStreak$nextThreeDayGameDuration) 
+#els_density_3day <- density(endedLosingStreak$nextThreeDayGameDuration)
+#ews_density_3day <- density(endedWinningStreak$nextThreeDayGameDuration) 
 els_density_week <- density(endedLosingStreak$nextWeekGameDuration)
 ews_density_week <- density(endedWinningStreak$nextWeekGameDuration) 
 
-plot(ews_density_week, col= 'blue') # plots the results
-lines(els_density_week,col = "red")
-plot(ews_density_3day, col= 'blue') # plots the results
-lines(els_density_3day,col = "red")
-plot(ews_density_day, col= 'blue') # plots the results
-lines(els_density_day,col = "red")
-plot(ews_density_3hour,col = "blue")
-lines(els_density_3hour,col = "red")
-plot(ews_density_hour,col = "blue")
-lines(els_density_hour,col = "red")
+#plots the density plots of next week game duration by ending win or loss streak
+plot(els_density_week, col= 'blue', main = 'Next Week Game Duration By Ending Streak') +lines(ews_density_week,col = "red") + legend("topright", c("ended losing streak",
+                                                                                                "ended winning streak"),
+                                                                                  fill= c("blue", 'red'))
+
+#plot(ews_density_3day, col= 'blue') # plots the results
+#lines(els_density_3day,col = "red")
+#plots the density plots of next dat game duration by ending win or loss streak
+plot(els_density_day, col= 'blue', main = 'Next Day Game Duration By Ending Streak')  +lines(ews_density_day,col = "red") + legend("topright", c("ended losing streak",
+                                                                                                "ended winning streak"),
+                                                                                  fill= c("blue", 'red'))
+
+#plot(ews_density_3hour,col = "blue")
+#lines(els_density_3hour,col = "red")
+#plots the density plots of next hour game duration by ending win or loss streak
+plot(els_density_hour,col = "blue", main = 'Next Hour Game Duration By Ending Streak') + lines(ews_density_hour,col = "red") + legend("topright", c("ended losing streak",
+                                                                                               "ended winning streak"),
+                                                                                 fill= c("blue", 'red'))
 
 
 
-## look at distributions and effects on future game duration played and the numeric value
 
+## look at plots and effects on future game duration played and the numeric value
+
+#cor of winstreak and loss streak with next day engagement
 plot(test_data_locked$nextDayGameDuration, test_data_locked$winStreak)
-cor(test_data_locked$nextDayGameDuration^2, test_data_locked$winStreak)
+cor(test_data_locked$nextDayGameDuration, test_data_locked$winStreak)
 
 winStreakData <-  test_data_locked[test_data_locked$winStreak>0,]
 lossStreakData <-  test_data_locked[test_data_locked$lossStreak>0,]
@@ -265,12 +280,12 @@ plot(lossStreakData$nextHourGameDuration, lossStreakData$lossStreak)
 cor(lossStreakData$nextHourGameDuration, lossStreakData$lossStreak)
 
 #three hour
-cor(winStreakData$nextThreeHourGameDuration, winStreakData$winStreak)
-cor(lossStreakData$nextThreeHourGameDuration, lossStreakData$lossStreak)
-cor(test_data_locked$nextThreeHourGameDuration, test_data_locked$lossStreak)
+#cor(winStreakData$nextThreeHourGameDuration, winStreakData$winStreak)
+#cor(lossStreakData$nextThreeHourGameDuration, lossStreakData$lossStreak)
+#cor(test_data_locked$nextThreeHourGameDuration, test_data_locked$lossStreak)
 
 
-#day
+#day cor of winstreak and loss streak with next day engagement
 cor(winStreakData$nextDayGameDuration, winStreakData$winStreak)
 cor(lossStreakData$nextDayGameDuration, lossStreakData$lossStreak)
 cor(test_data_locked$nextDayGameDuration, test_data_locked$lossStreak)
@@ -278,12 +293,12 @@ cor(test_data_locked$nextDayGameDuration, test_data_locked$winStreak)
 
 
 #3 day
-cor(winStreakData$nextThreeDayGameDuration, winStreakData$winStreak)
-cor(lossStreakData$nextThreeDayGameDuration, lossStreakData$lossStreak)
-cor(test_data_locked$nextThreeDayGameDuration, test_data_locked$lossStreak)
-cor(test_data_locked$nextThreeDayGameDuration, test_data_locked$winStreak)
+#cor(winStreakData$nextThreeDayGameDuration, winStreakData$winStreak)
+#cor(lossStreakData$nextThreeDayGameDuration, lossStreakData$lossStreak)
+#cor(test_data_locked$nextThreeDayGameDuration, test_data_locked$lossStreak)
+#cor(test_data_locked$nextThreeDayGameDuration, test_data_locked$winStreak)
 
-#week
+#week cor of winstreak and loss streak with next week engagement
 cor(winStreakData$nextWeekGameDuration, winStreakData$winStreak)
 cor(lossStreakData$nextWeekGameDuration, lossStreakData$lossStreak)
 cor(test_data_locked$nextWeekGameDuration, test_data_locked$lossStreak)
@@ -303,48 +318,63 @@ median(test_data_locked$nextDayGameDuration)
 
 #-----------------Regressions------------#
 
-## regression model of the next week and day game duration played per player
-heyo <- lm( nextDayGameDuration~ winStreak + lossStreak + ended_winning_streak +
-              ended_losing_streak+ kills+ assists +deaths
-            ,data = test_data_locked )
-summary(heyo)
+## this part looks into running regressions based off of the effects winning streaks have on the future engagement outputs
 
-heyo <- lm( nextWeekGameDuration~ winStreak + lossStreak + ended_winning_streak +
-              ended_losing_streak+ kills+ assists +deaths + win
+## regression model of the next day  based off streaks and ending streaks 
+heyo <- lm( nextDayGameDuration~ winStreak + lossStreak + ended_winning_streak +
+              ended_losing_streak
             ,data = test_data_locked )
 summary(heyo)
+RMSE(heyo$fitted.values, test_data_locked$nextDayGameDuration )
+
+## regression model of the next week  based off streaks and ending streaks 
+heyo <- lm( nextWeekGameDuration~ winStreak + lossStreak + ended_winning_streak +
+              ended_losing_streak
+            ,data = test_data_locked )
+summary(heyo)
+RMSE(heyo$fitted.values, test_data_locked$nextWeekGameDuration )
+
+## regression model of the next hour  based off streaks and ending streaks 
+heyo <- lm( nextHourGameDuration~ winStreak + lossStreak + ended_winning_streak +
+              ended_losing_streak
+            ,data = test_data_locked )
+summary(heyo)
+RMSE(heyo$fitted.values, test_data_locked$nextHourGameDuration )
+median(test_data_locked$nextHourGameDuration)
 
 
 
 
 colnames(test_data_locked)
 subsetted_correlation <- test_data_locked[, c('nextWeekGameDuration','nextDayGameDuration', 'nextHourGameDuration','winStreak' , 'lossStreak' , 'ended_winning_streak' ,
-                                                'ended_losing_streak', 'kills', 'assists' ,'deaths' ,
+                                              'ended_losing_streak', 'kills', 'assists' ,'deaths' ,
                                               'totalDamageDealt', 'goldEarned', 'goldSpent', 'largestKillingSpree',
                                               'totalTimeSpentDead')]
+## run corrplot on subset points of interest with streaks
 corrplot(cor(subsetted_correlation))
 
 cor(subsetted_correlation$totalDamageDealt, subsetted_correlation$nextHourGameDuration)
 
+## regression model of the next hour  based off streaks and ending streaks  and other general variables
 heyo <- lm( nextHourGameDuration~ winStreak + lossStreak + ended_winning_streak +
               ended_losing_streak+ kills+ assists +deaths + win+totalDamageDealt+
               goldEarned + goldSpent + largestKillingSpree +totalTimeSpentDead+timeCCingOthers
             ,data = test_data_locked )
 summary(heyo)
+
+## regression model of the next hour  based off streaks and ending streaks  and other general variables
 heyo <- glm( nextHourGameDuration~ winStreak + lossStreak + ended_winning_streak +
-              ended_losing_streak+ kills+ assists +deaths + win+totalDamageDealt+
-              goldEarned + goldSpent + largestKillingSpree +totalTimeSpentDead+timeCCingOthers
-            ,data = test_data_locked )
+               ended_losing_streak+ kills+ assists +deaths + win+totalDamageDealt+
+               goldEarned + goldSpent + largestKillingSpree +totalTimeSpentDead+timeCCingOthers
+             ,data = test_data_locked )
 RMSE(heyo$fitted.values, test_data_locked$nextHourGameDuration)
 mean(test_data_locked$nextHourGameDuration)
 summary(heyo)
 
 
 
-
+##skip this section
 ## subset into where people in next hour/day/week have played 0 hours and see and key distribution differences with certain variables
-
-
 noHourPlayedTraits <- test_data_locked[test_data_locked$nextHourGameDuration == 0,]
 HourPlayedTraits <- test_data_locked[test_data_locked$nextHourGameDuration > 0,]
 
@@ -354,8 +384,8 @@ DayPlayedTraits <- test_data_locked[test_data_locked$nextDayGameDuration > 0,]
 
 
 hi <-  c('winStreak' , 'lossStreak' , 'ended_winning_streak' ,
-  'ended_losing_streak', 'kills', 'assists' ,'deaths' ,'totalDamageDealt',
-  'goldEarned' , 'goldSpent' , 'largestKillingSpree' ,'totalTimeSpentDead','timeCCingOthers')
+         'ended_losing_streak', 'kills', 'assists' ,'deaths' ,'totalDamageDealt',
+         'goldEarned' , 'goldSpent' , 'largestKillingSpree' ,'totalTimeSpentDead','timeCCingOthers')
 hi1 <- noDayPlayedTraits[, c(12:14, 126:128,130:225,245:253)]
 summary(hi1)
 hi2 <- DayPlayedTraits[, c(12:14, 126:128,130:225,245:253)]
@@ -379,7 +409,7 @@ median_hello2 <- apply(hi2,2,median)
 hello<-((median_hello)-(median_hello2))/(median_hello2)
 
 hello
-
+## end of skip section
 
 
 
@@ -387,6 +417,8 @@ hello
 
 
 #--------------random forests on next hourGameduration------#
+
+## tree map with more variables and winstreak
 m2 <- rpart(formula =nextHourGameDuration~ winStreak + lossStreak + ended_winning_streak +
               ended_losing_streak+ kills+ assists +deaths + win+totalDamageDealt+
               goldEarned + goldSpent + largestKillingSpree +totalTimeSpentDead+timeCCingOthers,
@@ -395,6 +427,8 @@ rpart.plot(m2)
 
 
 data(mtcars)
+
+## random forest for next hour with streaks and other variables
 rf.fit <- randomForest(formula =nextHourGameDuration~ winStreak + lossStreak + ended_winning_streak +
                          ended_losing_streak+ kills+ assists +deaths + win+totalDamageDealt+
                          goldEarned + goldSpent + largestKillingSpree +totalTimeSpentDead+timeCCingOthers,
@@ -439,11 +473,60 @@ tree<-ctree(formula =nextDayGameDuration~ winStreak + lossStreak + ended_winning
 plot(tree)
 
 tr<-rpart(formula =nextHourGameDuration~ winStreak + lossStreak + ended_winning_streak +
-             ended_losing_streak+ kills+ assists +deaths +totalDamageDealt+
-             goldEarned + goldSpent + largestKillingSpree +totalTimeSpentDead+timeCCingOthers,
-           data = test_data_locked)
+            ended_losing_streak+ kills+ assists +deaths +totalDamageDealt+
+            goldEarned + goldSpent + largestKillingSpree +totalTimeSpentDead+timeCCingOthers,
+          data = test_data_locked)
 tr$variable.importance
 rpart.plot(tr)
 
 #------------- end of decision Trees
+
+
+
+subsetted_correlation <- winStreakData[, c('nextWeekGameDuration','nextDayGameDuration', 'nextHourGameDuration','winStreak'  ,
+                                              'ended_losing_streak')]
+corrplot(cor(subsetted_correlation), title = 'Correlation of Win Streak Data')
+
+subsetted_correlation <- lossStreakData[, c('nextWeekGameDuration','nextDayGameDuration', 'nextHourGameDuration' , 'lossStreak' , 'ended_winning_streak' 
+                                           )]
+corrplot(cor(subsetted_correlation), main= "Correlation of loss streak data")
+
+
+
+
+
+
+
+
+
+#--------- more ranadom forests--------#
+
+## this was used in disseration
+#runs random forest at ntree=500 for all three time periods
+rf.fit_hour <- randomForest(formula =nextHourGameDuration~ winStreak + lossStreak + ended_winning_streak +
+                         ended_losing_streak,
+                       data = test_data_locked,
+                       ntree=500,
+                       keep.forest=FALSE, importance=TRUE)
+
+
+rf.fit_day <- randomForest(formula =nextDayGameDuration~ winStreak + lossStreak + ended_winning_streak +
+                              ended_losing_streak,
+                            data = test_data_locked,
+                            ntree=500,
+                            keep.forest=FALSE, importance=TRUE)
+
+rf.fit_week <- randomForest(formula =nextWeekGameDuration~ winStreak + lossStreak + ended_winning_streak +
+                              ended_losing_streak,
+                            data = test_data_locked,
+                            ntree=500,
+                            keep.forest=FALSE, importance=TRUE)
+
+
+rf.fit_hour
+rf.fit_day
+rf.fit_week
+
+
+
 
