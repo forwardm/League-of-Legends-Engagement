@@ -64,7 +64,7 @@ cor(kda_duration)
 
 #the function input needs to have the columns gameStartTimeStamp and puuid
 gameEngagementFutures <- function(focus_data) {
-
+  
   days <- focus_data[,c('gameStartTimestamp')]
   puuid_1 <- focus_data[,c('puuid')]
   duration_futures <- focus_data
@@ -110,6 +110,7 @@ which( colnames(test_data)=="totalTimeSpentDead" )
 regression_data_2 <- regression_data[,c(7:11,13,14,18)]
 head(regression_data_2)
 
+#want to see general regression based off of lots of data
 regression <- lm(nextThreeDayGameDuration ~., data= regression_data_2)
 
 
@@ -121,7 +122,7 @@ correlation <- cor(regression_data_2)
 corrplot(correlation)
 
 
-# Create the tree.
+# Create the decision tree for regression
 
 m2 <- rpart(
   formula = nextThreeHourGameDuration ~ .,
@@ -137,7 +138,6 @@ rpart.plot(m2)
 correlation_data <- regression_data[,-c(6)]
 correlations <- cor(correlation_data)
 corrplot(correlations)
-
 
 
 
